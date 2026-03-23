@@ -171,6 +171,20 @@ export function CompoundersApp() {
     (best, routine) => Math.max(best, getCurrentStreak(routine, now)),
     0,
   );
+  const completionPercent = activeRoutines.length
+    ? Math.round((completedRoutines.length / activeRoutines.length) * 100)
+    : 0;
+  const dayPoints = completedRoutines.reduce((sum, routine) => {
+    if (routine.cadence === "daily") {
+      return sum + 10;
+    }
+
+    if (routine.cadence === "weekly") {
+      return sum + 20;
+    }
+
+    return sum + 30;
+  }, 0);
 
   function showToast(message: string) {
     setToast({
@@ -469,10 +483,41 @@ export function CompoundersApp() {
 
       {view === "today" ? (
         <>
-          <section className="grid gap-3 sm:grid-cols-3">
-            <TopMetric label="Still to do" value={`${pendingRoutines.length}`} />
-            <TopMetric label="Done today" value={`${completedRoutines.length}`} />
-            <TopMetric label="Best live streak" value={`${bestLiveStreak}`} />
+          <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+            <section className="rounded-[2rem] border border-[var(--border)] bg-white p-5 shadow-[0_10px_30px_rgba(20,27,24,0.05)] sm:p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-[var(--muted)]">Today&apos;s score</p>
+                  <h2 className="text-4xl font-semibold tracking-[-0.05em] text-[var(--foreground)]">
+                    {completionPercent}%
+                  </h2>
+                  <p className="text-sm leading-6 text-[var(--muted)]">
+                    {completedRoutines.length} of {activeRoutines.length} actions completed.
+                  </p>
+                </div>
+                <div className="rounded-[1.4rem] bg-[var(--surface-soft)] px-4 py-3 text-right">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                    Points
+                  </p>
+                  <p className="mt-1 text-3xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
+                    {dayPoints}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 h-3 overflow-hidden rounded-full bg-[var(--surface-soft)]">
+                <div
+                  className="h-full rounded-full bg-[var(--accent)] transition-all duration-300"
+                  style={{ width: `${Math.max(completionPercent, activeRoutines.length ? 8 : 0)}%` }}
+                />
+              </div>
+            </section>
+
+            <section className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+              <TopMetric label="Still to do" value={`${pendingRoutines.length}`} />
+              <TopMetric label="Done today" value={`${completedRoutines.length}`} />
+              <TopMetric label="Best live streak" value={`${bestLiveStreak}`} />
+            </section>
           </section>
 
           <section className="rounded-[2rem] border border-[var(--border)] bg-white shadow-[0_10px_30px_rgba(20,27,24,0.05)]">
@@ -699,6 +744,8 @@ function TodayRow({
   onToggle: () => void;
 }) {
   const lastCompletion = getLastCompletion(routine);
+  const currentStreak = getCurrentStreak(routine, now);
+  const status = getRoutineStatus(routine, now);
 
   return (
     <article
@@ -717,6 +764,8 @@ function TodayRow({
             <span className="rounded-full bg-[var(--pill)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">
               {CADENCE_LABELS[routine.cadence]}
             </span>
+            <StreakChip streak={currentStreak} />
+            <StatusBadge status={status} />
           </div>
           <p className="text-sm leading-6 text-[var(--muted)]">
             {routine.intention || "No note."}
@@ -815,6 +864,15 @@ function TopMetric({ label, value }: { label: string; value: string }) {
         {value}
       </p>
     </div>
+  );
+}
+
+function StreakChip({ streak }: { streak: number }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--streak-soft)] px-2.5 py-1 text-xs font-medium text-[var(--streak-strong)]">
+      <span className="h-2 w-2 rounded-full bg-[var(--streak)]" />
+      {streak} streak
+    </span>
   );
 }
 

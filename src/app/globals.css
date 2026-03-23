@@ -11,6 +11,9 @@
   --muted: #6a746e;
   --accent: #0d6b43;
   --accent-soft: #d9e9df;
+  --streak: #ff8b37;
+  --streak-soft: #ffe5d1;
+  --streak-strong: #a24e11;
 }
 
 @theme inline {
