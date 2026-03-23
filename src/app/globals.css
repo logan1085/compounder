@@ -1,27 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f3ea;
-  --foreground: #223127;
-  --panel: #fffdf8;
-  --panel-shadow: #e8dfd1;
-  --surface-soft: #f2ede3;
-  --pill: #ece4d7;
-  --border: rgba(34, 49, 39, 0.1);
-  --line-strong: #d4cabb;
-  --muted: #6d776f;
-  --accent: #58b72f;
-  --accent-dark: #429121;
-  --accent-soft: #ddefd2;
-  --sun: #ffd44d;
-  --sun-soft: #fff0b3;
-  --sun-deep: #9d6c00;
+  --background: #f7f5f0;
+  --foreground: #18231f;
+  --panel: #fcfbf8;
+  --surface-soft: #f3efe7;
+  --pill: #ece7de;
+  --border: rgba(24, 35, 31, 0.1);
+  --line-strong: #cdd9d0;
+  --muted: #6a746e;
+  --accent: #0d6b43;
+  --accent-soft: #d9e9df;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-nunito);
+  --font-sans: var(--font-manrope);
   --font-mono: var(--font-ibm-plex-mono);
 }
 
@@ -36,11 +31,9 @@ html {
 
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.42), transparent 26%),
-    var(--background);
+  background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-nunito), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -53,7 +46,7 @@ a {
 }
 
 ::selection {
-  background: rgba(88, 183, 47, 0.22);
+  background: rgba(34, 90, 67, 0.2);
 }
 
 button,

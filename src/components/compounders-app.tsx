@@ -23,11 +23,16 @@ import {
 
 const STORAGE_KEY = "compounders:routines:v2";
 const LEGACY_STORAGE_KEY = "compounders:routines:v1";
+const PROFILE_KEY = "compounders:profile:v1";
 
 type FormState = {
   title: string;
   cadence: Cadence;
   intention: string;
+};
+
+type ProfileState = {
+  name: string;
 };
 
 type ToastState = {
@@ -43,7 +48,7 @@ const FORM_DEFAULTS: FormState = {
 
 function createRoutine(values: FormState, count: number): Routine {
   const timestamp = new Date().toISOString();
-  const colors = ["green", "yellow", "blue", "orange", "pink", "mint"];
+  const colors = ["neutral", "neutral", "neutral", "neutral", "neutral", "neutral"];
 
   return {
     id: crypto.randomUUID(),
@@ -56,38 +61,6 @@ function createRoutine(values: FormState, count: number): Routine {
     archivedAt: null,
     completions: [],
   };
-}
-
-function xpForCadence(cadence: Cadence) {
-  if (cadence === "daily") {
-    return 15;
-  }
-
-  if (cadence === "weekly") {
-    return 35;
-  }
-
-  return 60;
-}
-
-function getLeague(totalXp: number) {
-  if (totalXp >= 1800) {
-    return "Diamond";
-  }
-
-  if (totalXp >= 1200) {
-    return "Emerald";
-  }
-
-  if (totalXp >= 700) {
-    return "Gold";
-  }
-
-  if (totalXp >= 300) {
-    return "Silver";
-  }
-
-  return "Bronze";
 }
 
 function sortRoutines(routines: Routine[], now: Date) {
@@ -122,12 +95,13 @@ function downloadJsonFile(filename: string, data: unknown) {
 }
 
 export function CompoundersApp() {
+  const [profile, setProfile] = useState<ProfileState | null>(null);
+  const [nameInput, setNameInput] = useState("");
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [form, setForm] = useState<FormState>(FORM_DEFAULTS);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [recentlyTouchedId, setRecentlyTouchedId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const todayKey = formatDateKey(new Date());
@@ -135,6 +109,17 @@ export function CompoundersApp() {
 
   useEffect(() => {
     try {
+      const savedProfile = localStorage.getItem(PROFILE_KEY);
+
+      if (savedProfile) {
+        const parsed = JSON.parse(savedProfile) as ProfileState;
+
+        if (parsed.name) {
+          setProfile(parsed);
+          setNameInput(parsed.name);
+        }
+      }
+
       const current = localStorage.getItem(STORAGE_KEY);
       const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
       const source = current ?? legacy;
@@ -152,6 +137,14 @@ export function CompoundersApp() {
   }, [routines]);
 
   useEffect(() => {
+    if (!profile) {
+      return;
+    }
+
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  }, [profile]);
+
+  useEffect(() => {
     if (!toast) {
       return;
     }
@@ -159,15 +152,6 @@ export function CompoundersApp() {
     const timeout = window.setTimeout(() => setToast(null), 2200);
     return () => window.clearTimeout(timeout);
   }, [toast]);
-
-  useEffect(() => {
-    if (!recentlyTouchedId) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => setRecentlyTouchedId(null), 1200);
-    return () => window.clearTimeout(timeout);
-  }, [recentlyTouchedId]);
 
   const activeRoutines = useMemo(() => getActiveRoutines(routines), [routines]);
   const archivedRoutines = useMemo(() => getArchivedRoutines(routines), [routines]);
@@ -182,25 +166,10 @@ export function CompoundersApp() {
   const completedRoutines = orderedRoutines.filter((routine) =>
     isCompleteThisPeriod(routine, now),
   );
-
-  const totalXp = activeRoutines.reduce(
-    (sum, routine) => sum + routine.completions.length * xpForCadence(routine.cadence),
-    0,
-  );
-  const todayXp = completedRoutines.reduce(
-    (sum, routine) => sum + xpForCadence(routine.cadence),
-    0,
-  );
   const bestLiveStreak = orderedRoutines.reduce(
     (best, routine) => Math.max(best, getCurrentStreak(routine, now)),
     0,
   );
-  const level = Math.floor(totalXp / 120) + 1;
-  const levelProgress = totalXp % 120;
-  const completionScore = activeRoutines.length
-    ? Math.round((completedRoutines.length / activeRoutines.length) * 100)
-    : 0;
-  const league = getLeague(totalXp);
 
   function showToast(message: string) {
     setToast({
@@ -209,13 +178,20 @@ export function CompoundersApp() {
     });
   }
 
-  function touchRoutine(routineId: string) {
-    setRecentlyTouchedId(routineId);
-  }
-
   function resetForm() {
     setForm(FORM_DEFAULTS);
     setEditingId(null);
+  }
+
+  function saveName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!nameInput.trim()) {
+      return;
+    }
+
+    setProfile({ name: nameInput.trim() });
+    showToast("Welcome in.");
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -246,18 +222,13 @@ export function CompoundersApp() {
             : routine,
         ),
       );
-      touchRoutine(editingId);
-      showToast("Quest updated.");
+      showToast("Updated.");
       resetForm();
       return;
     }
 
-    setRoutines((current) => {
-      const routine = createRoutine(form, current.length);
-      touchRoutine(routine.id);
-      return [routine, ...current];
-    });
-    showToast("Quest added.");
+    setRoutines((current) => [createRoutine(form, current.length), ...current]);
+    showToast("Added.");
     resetForm();
   }
 
@@ -299,11 +270,10 @@ export function CompoundersApp() {
       }),
     );
 
-    touchRoutine(routineId);
     showToast(
       wasComplete
-        ? `Removed ${getCadenceWindowLabel(target?.cadence ?? "daily")} progress.`
-        : `Earned +${xpForCadence(target?.cadence ?? "daily")} XP.`,
+        ? `Undid ${getCadenceWindowLabel(target?.cadence ?? "daily")}.`
+        : `Completed ${getCadenceWindowLabel(target?.cadence ?? "daily")}.`,
     );
   }
 
@@ -324,7 +294,7 @@ export function CompoundersApp() {
       resetForm();
     }
 
-    showToast("Quest archived.");
+    showToast("Archived.");
   }
 
   function restoreRoutine(routineId: string) {
@@ -340,11 +310,11 @@ export function CompoundersApp() {
       ),
     );
     setShowArchived(false);
-    showToast("Quest restored.");
+    showToast("Restored.");
   }
 
   function deleteRoutine(routineId: string) {
-    if (!window.confirm("Delete this quest permanently?")) {
+    if (!window.confirm("Delete this permanently?")) {
       return;
     }
 
@@ -354,15 +324,16 @@ export function CompoundersApp() {
       resetForm();
     }
 
-    showToast("Quest deleted.");
+    showToast("Deleted.");
   }
 
   function exportData() {
     downloadJsonFile("compounders-export.json", {
       exportedAt: new Date().toISOString(),
+      profile,
       routines,
     });
-    showToast("Exported your progress.");
+    showToast("Exported.");
   }
 
   function handleImport(event: ChangeEvent<HTMLInputElement>) {
@@ -376,13 +347,31 @@ export function CompoundersApp() {
     reader.onload = () => {
       try {
         const payload = JSON.parse(String(reader.result));
-        const imported = normalizeRoutines(
+        const importedRoutines = normalizeRoutines(
           Array.isArray(payload) ? payload : payload.routines,
         );
 
-        setRoutines(imported);
+        setRoutines(importedRoutines);
+
+        if (
+          payload &&
+          typeof payload === "object" &&
+          "profile" in payload &&
+          payload.profile &&
+          typeof payload.profile === "object" &&
+          "name" in (payload.profile as Record<string, unknown>) &&
+          typeof (payload.profile as Record<string, unknown>).name === "string"
+        ) {
+          const name = (payload.profile as Record<string, string>).name.trim();
+
+          if (name) {
+            setProfile({ name });
+            setNameInput(name);
+          }
+        }
+
         resetForm();
-        showToast("Imported your progress.");
+        showToast("Imported.");
       } catch (error) {
         console.error("Unable to import Compounders data", error);
         window.alert("That file could not be imported.");
@@ -395,94 +384,100 @@ export function CompoundersApp() {
     reader.readAsText(file);
   }
 
-  return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-10">
-      <section className="rounded-[2.25rem] bg-[var(--accent)] p-6 text-white shadow-[0_8px_0_0_var(--accent-dark)] sm:p-8">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+  if (!profile) {
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-3xl items-center px-4 py-12 sm:px-6">
+        <section className="w-full rounded-[2rem] border border-[var(--border)] bg-white p-8 shadow-[0_12px_32px_rgba(20,27,24,0.05)] sm:p-10">
           <div className="space-y-4">
-            <div className="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-xs font-extrabold uppercase tracking-[0.18em] text-white/85">
+            <div className="inline-flex items-center rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
               Compounders
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-bold uppercase tracking-[0.14em] text-white/75">
-                {new Intl.DateTimeFormat("en-US", {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                }).format(now)}
-              </p>
-              <h1 className="max-w-2xl text-4xl font-extrabold tracking-[-0.05em] sm:text-5xl">
-                Complete your quests and keep the streak alive.
+              <h1 className="text-4xl font-semibold tracking-[-0.05em] text-[var(--foreground)] sm:text-5xl">
+                Simple habit tracking.
               </h1>
+              <p className="max-w-xl text-base leading-7 text-[var(--muted)]">
+                Start by telling the app your name. After that, you just open it and
+                check off what matters today.
+              </p>
             </div>
-            <p className="max-w-2xl text-base leading-7 text-white/82">
-              The everyday operating point is still one clear place: today’s missions.
-              The overview just makes the progress feel rewarding.
-            </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:w-[320px] lg:grid-cols-1">
-            <HeroBadge label="League" value={league} />
-            <HeroBadge label="Today XP" value={`${todayXp}`} />
-            <HeroBadge label="Best live streak" value={`${bestLiveStreak}`} />
-          </div>
-        </div>
+          <form className="mt-8 space-y-4" onSubmit={saveName}>
+            <label className="grid gap-2">
+              <span className="text-sm font-medium text-[var(--foreground)]">Your name</span>
+              <input
+                className={inputClassName}
+                placeholder="Logan"
+                value={nameInput}
+                onChange={(event) => setNameInput(event.target.value)}
+              />
+            </label>
+            <button type="submit" className={primaryButtonClassName}>
+              Continue
+            </button>
+          </form>
+        </section>
+      </main>
+    );
+  }
 
-        <div className="mt-7 grid gap-3 sm:grid-cols-3">
-          <HeroCard label="Level" value={`${level}`} subvalue={`${levelProgress}/120 XP`} />
-          <HeroCard
-            label="Completion score"
-            value={`${completionScore}%`}
-            subvalue={`${completedRoutines.length}/${activeRoutines.length || 0} complete`}
-          />
-          <HeroCard
-            label="Open quests"
-            value={`${pendingRoutines.length}`}
-            subvalue={pendingRoutines.length === 1 ? "1 left today" : `${pendingRoutines.length} left today`}
-          />
+  return (
+    <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12">
+      <header className="space-y-4">
+        <div className="inline-flex items-center rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
+          Compounders
         </div>
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-[var(--muted)]">
+            {new Intl.DateTimeFormat("en-US", {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+            }).format(now)}
+          </p>
+          <h1 className="text-4xl font-semibold tracking-[-0.05em] text-[var(--foreground)] sm:text-5xl">
+            Hi {profile.name}.
+          </h1>
+          <p className="max-w-2xl text-base leading-7 text-[var(--muted)]">
+            Open this page, check what still needs to happen, and move on.
+          </p>
+        </div>
+      </header>
 
-        <div className="mt-4 h-4 overflow-hidden rounded-full bg-white/18">
-          <div
-            className="h-full rounded-full bg-[var(--sun)] transition-all duration-500"
-            style={{ width: `${Math.max((levelProgress / 120) * 100, 8)}%` }}
-          />
-        </div>
+      <section className="grid gap-3 sm:grid-cols-3">
+        <TopMetric label="Still to do" value={`${pendingRoutines.length}`} />
+        <TopMetric label="Done today" value={`${completedRoutines.length}`} />
+        <TopMetric label="Best live streak" value={`${bestLiveStreak}`} />
       </section>
 
-      <section className="rounded-[2rem] border border-[var(--line-strong)] bg-white shadow-[0_8px_0_0_var(--panel-shadow)]">
+      <section className="rounded-[2rem] border border-[var(--border)] bg-white shadow-[0_10px_30px_rgba(20,27,24,0.05)]">
         <div className="border-b border-[var(--border)] px-5 py-5 sm:px-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="space-y-1">
-              <p className="text-sm font-extrabold uppercase tracking-[0.16em] text-[var(--muted)]">
-                Daily Board
-              </p>
-              <h2 className="text-3xl font-extrabold tracking-[-0.04em] text-[var(--foreground)]">
-                Today&apos;s missions
-              </h2>
-              <p className="text-sm leading-6 text-[var(--muted)]">
-                Start here every day. Pending first, completed second.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <TinyChip>{pendingRoutines.length} pending</TinyChip>
-              <TinyChip>{completedRoutines.length} complete</TinyChip>
-            </div>
-          </div>
+          <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
+            Today
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+            Pending first. Completed stays below.
+          </p>
         </div>
 
         <div className="space-y-6 px-5 py-5 sm:px-6">
           {pendingRoutines.length === 0 ? (
-            <CelebrationCard />
+            <div className="rounded-[1.5rem] border border-dashed border-[var(--border)] bg-[var(--panel)] px-6 py-10 text-center">
+              <p className="text-lg font-medium text-[var(--foreground)]">
+                You’re clear for now.
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                Everything due has been completed.
+              </p>
+            </div>
           ) : (
             <div className="space-y-3">
               {pendingRoutines.map((routine) => (
-                <MissionRow
+                <RoutineRow
                   key={routine.id}
                   routine={routine}
                   now={now}
-                  highlighted={recentlyTouchedId === routine.id}
                   onToggle={() => toggleRoutineCompletion(routine.id)}
                   onEdit={() => handleEdit(routine)}
                   onArchive={() => archiveRoutine(routine.id)}
@@ -493,29 +488,18 @@ export function CompoundersApp() {
 
           {completedRoutines.length > 0 ? (
             <div className="space-y-3 border-t border-[var(--border)] pt-6">
-              <div className="space-y-1">
-                <p className="text-sm font-extrabold uppercase tracking-[0.16em] text-[var(--muted)]">
-                  Completed
-                </p>
-                <p className="text-sm leading-6 text-[var(--muted)]">
-                  Still visible, but quieter.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {completedRoutines.map((routine) => (
-                  <MissionRow
-                    key={routine.id}
-                    routine={routine}
-                    now={now}
-                    complete
-                    highlighted={recentlyTouchedId === routine.id}
-                    onToggle={() => toggleRoutineCompletion(routine.id)}
-                    onEdit={() => handleEdit(routine)}
-                    onArchive={() => archiveRoutine(routine.id)}
-                  />
-                ))}
-              </div>
+              <p className="text-sm font-medium text-[var(--muted)]">Completed</p>
+              {completedRoutines.map((routine) => (
+                <RoutineRow
+                  key={routine.id}
+                  routine={routine}
+                  now={now}
+                  complete
+                  onToggle={() => toggleRoutineCompletion(routine.id)}
+                  onEdit={() => handleEdit(routine)}
+                  onArchive={() => archiveRoutine(routine.id)}
+                />
+              ))}
             </div>
           ) : null}
         </div>
@@ -523,21 +507,39 @@ export function CompoundersApp() {
 
       <section
         ref={formRef}
-        className="rounded-[2rem] border border-[var(--line-strong)] bg-white p-5 shadow-[0_8px_0_0_var(--panel-shadow)] sm:p-6"
+        className="rounded-[2rem] border border-[var(--border)] bg-[var(--panel)] p-5 shadow-[0_10px_30px_rgba(20,27,24,0.04)] sm:p-6"
       >
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div className="space-y-1">
-            <p className="text-sm font-extrabold uppercase tracking-[0.16em] text-[var(--muted)]">
-              Quest Builder
-            </p>
-            <h2 className="text-3xl font-extrabold tracking-[-0.04em] text-[var(--foreground)]">
-              {editingId ? "Edit quest" : "Add a new quest"}
+          <div>
+            <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
+              {editingId ? "Edit routine" : "Add routine"}
             </h2>
+            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+              Keep setup simple.
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <UtilityButton onClick={exportData}>Export</UtilityButton>
-            <UtilityButton onClick={() => fileInputRef.current?.click()}>Import</UtilityButton>
+            <button type="button" className={secondaryButtonClassName} onClick={exportData}>
+              Export
+            </button>
+            <button
+              type="button"
+              className={secondaryButtonClassName}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Import
+            </button>
+            <button
+              type="button"
+              className={secondaryButtonClassName}
+              onClick={() => {
+                setProfile(null);
+                localStorage.removeItem(PROFILE_KEY);
+              }}
+            >
+              Change name
+            </button>
             <input
               ref={fileInputRef}
               className="hidden"
@@ -549,9 +551,9 @@ export function CompoundersApp() {
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="grid gap-4 sm:grid-cols-[1.25fr_1fr]">
+          <div className="grid gap-4 sm:grid-cols-[1.25fr_0.95fr]">
             <label className="grid gap-2">
-              <span className="text-sm font-bold text-[var(--foreground)]">Quest name</span>
+              <span className="text-sm font-medium text-[var(--foreground)]">Title</span>
               <input
                 className={inputClassName}
                 placeholder="Read for 20 minutes"
@@ -563,13 +565,15 @@ export function CompoundersApp() {
             </label>
 
             <label className="grid gap-2">
-              <span className="text-sm font-bold text-[var(--foreground)]">Cadence</span>
+              <span className="text-sm font-medium text-[var(--foreground)]">Cadence</span>
               <div className="grid grid-cols-3 gap-2">
                 {CADENCE_ORDER.map((cadence) => (
                   <button
                     key={cadence}
                     type="button"
-                    className={form.cadence === cadence ? activePillClassName : secondaryPillClassName}
+                    className={
+                      form.cadence === cadence ? activePillClassName : secondaryPillClassName
+                    }
                     onClick={() =>
                       setForm((current) => ({
                         ...current,
@@ -585,10 +589,10 @@ export function CompoundersApp() {
           </div>
 
           <label className="grid gap-2">
-            <span className="text-sm font-bold text-[var(--foreground)]">Why it matters</span>
+            <span className="text-sm font-medium text-[var(--foreground)]">Note</span>
             <textarea
               className={`${inputClassName} min-h-24 resize-none`}
-              placeholder="Give yourself a reason to care about this one."
+              placeholder="Optional context"
               value={form.intention}
               onChange={(event) =>
                 setForm((current) => ({ ...current, intention: event.target.value }))
@@ -598,7 +602,7 @@ export function CompoundersApp() {
 
           <div className="flex flex-wrap gap-3">
             <button type="submit" className={primaryButtonClassName}>
-              {editingId ? "Save quest" : "Add quest"}
+              {editingId ? "Save changes" : "Add routine"}
             </button>
             {editingId ? (
               <button type="button" className={secondaryButtonClassName} onClick={resetForm}>
@@ -609,19 +613,23 @@ export function CompoundersApp() {
         </form>
       </section>
 
-      <section className="rounded-[2rem] border border-[var(--line-strong)] bg-white p-5 shadow-[0_8px_0_0_var(--panel-shadow)] sm:p-6">
+      <section className="rounded-[2rem] border border-[var(--border)] bg-[var(--panel)] p-5 shadow-[0_10px_30px_rgba(20,27,24,0.04)] sm:p-6">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-extrabold uppercase tracking-[0.16em] text-[var(--muted)]">
-              Archive
-            </p>
-            <h2 className="text-2xl font-extrabold tracking-[-0.03em] text-[var(--foreground)]">
-              Parked quests
+            <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--foreground)]">
+              Archived
             </h2>
+            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+              Hidden from the main flow.
+            </p>
           </div>
-          <UtilityButton onClick={() => setShowArchived((current) => !current)}>
+          <button
+            type="button"
+            className={secondaryButtonClassName}
+            onClick={() => setShowArchived((current) => !current)}
+          >
             {showArchived ? "Hide" : `Show ${archivedRoutines.length}`}
-          </UtilityButton>
+          </button>
         </div>
 
         {showArchived ? (
@@ -647,11 +655,10 @@ export function CompoundersApp() {
   );
 }
 
-function MissionRow({
+function RoutineRow({
   routine,
   now,
   complete = false,
-  highlighted,
   onToggle,
   onEdit,
   onArchive,
@@ -659,7 +666,6 @@ function MissionRow({
   routine: Routine;
   now: Date;
   complete?: boolean;
-  highlighted: boolean;
   onToggle: () => void;
   onEdit: () => void;
   onArchive: () => void;
@@ -668,23 +674,22 @@ function MissionRow({
   const currentStreak = getCurrentStreak(routine, now);
   const bestStreak = getBestStreak(routine);
   const lastCompletion = getLastCompletion(routine);
-  const xp = xpForCadence(routine.cadence);
 
   return (
     <article
-      className={`rounded-[1.6rem] border px-4 py-4 transition-all sm:px-5 ${
+      className={`rounded-[1.5rem] border px-4 py-4 transition sm:px-5 ${
         complete
           ? "border-[var(--border)] bg-[var(--surface-soft)]"
-          : "border-[var(--line-strong)] bg-white shadow-[0_6px_0_0_var(--panel-shadow)]"
-      } ${highlighted ? "translate-y-[-2px] shadow-[0_8px_0_0_var(--panel-shadow)]" : ""}`}
+          : "border-[var(--line-strong)] bg-white shadow-[0_6px_20px_rgba(20,27,24,0.04)]"
+      }`}
     >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-4">
           <button
             type="button"
-            className={`mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-[3px] text-xl font-black transition ${
+            className={`mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-lg transition ${
               complete
-                ? "border-[var(--accent)] bg-[var(--accent)] text-white shadow-[0_4px_0_0_var(--accent-dark)]"
+                ? "border-[var(--accent)] bg-[var(--accent)] text-white"
                 : "border-[var(--line-strong)] bg-white text-[var(--foreground)] hover:border-[var(--accent)]"
             }`}
             onClick={onToggle}
@@ -694,21 +699,22 @@ function MissionRow({
 
           <div className="min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-xl font-extrabold tracking-[-0.03em] text-[var(--foreground)]">
+              <h3 className="text-xl font-semibold tracking-[-0.03em] text-[var(--foreground)]">
                 {routine.title}
               </h3>
-              <TinyChip>{CADENCE_LABELS[routine.cadence]}</TinyChip>
+              <span className="rounded-full bg-[var(--pill)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">
+                {CADENCE_LABELS[routine.cadence]}
+              </span>
               <StatusBadge status={status} />
-              <RewardChip xp={xp} />
             </div>
             <p className="text-sm leading-6 text-[var(--muted)]">
-              {routine.intention || "No note yet."}
+              {routine.intention || "No note."}
             </p>
-            <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm font-medium text-[var(--muted)]">
+            <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-[var(--muted)]">
               <span>{getWindowRangeLabel(routine.cadence, now)}</span>
-              <span>{currentStreak} streak</span>
+              <span>{currentStreak} current streak</span>
               <span>{bestStreak} best</span>
-              <span>{lastCompletion ? `Last ${formatLongDate(lastCompletion)}` : "New quest"}</span>
+              <span>{lastCompletion ? `Last ${formatLongDate(lastCompletion)}` : "Not started yet"}</span>
             </div>
           </div>
         </div>
@@ -736,9 +742,9 @@ function ArchivedRow({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-[1.4rem] border border-[var(--border)] bg-[var(--surface-soft)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 rounded-[1.4rem] border border-[var(--border)] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="font-extrabold text-[var(--foreground)]">{routine.title}</p>
+        <p className="font-medium text-[var(--foreground)]">{routine.title}</p>
         <p className="mt-1 text-sm text-[var(--muted)]">
           {CADENCE_LABELS[routine.cadence]} • archived {formatLongDate(routine.archivedAt ?? routine.updatedAt)}
         </p>
@@ -755,66 +761,22 @@ function ArchivedRow({
   );
 }
 
-function CelebrationCard() {
+function TopMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[1.7rem] border border-[var(--line-strong)] bg-[var(--surface-soft)] px-6 py-10 text-center">
-      <p className="text-sm font-extrabold uppercase tracking-[0.16em] text-[var(--muted)]">
-        All Clear
-      </p>
-      <h3 className="mt-2 text-3xl font-extrabold tracking-[-0.04em] text-[var(--foreground)]">
-        Everything is complete.
-      </h3>
-      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-        You cleared today&apos;s board. Add another quest below or enjoy the clean slate.
+    <div className="rounded-[1.6rem] border border-[var(--border)] bg-white px-4 py-4 shadow-[0_6px_18px_rgba(20,27,24,0.03)]">
+      <p className="text-sm font-medium text-[var(--muted)]">{label}</p>
+      <p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
+        {value}
       </p>
     </div>
   );
 }
 
-function HeroCard({
-  label,
-  value,
-  subvalue,
+function StatusBadge({
+  status,
 }: {
-  label: string;
-  value: string;
-  subvalue: string;
+  status: ReturnType<typeof getRoutineStatus>;
 }) {
-  return (
-    <div className="rounded-[1.5rem] border border-white/16 bg-white/10 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
-      <p className="text-sm font-extrabold uppercase tracking-[0.16em] text-white/70">{label}</p>
-      <p className="mt-2 text-3xl font-extrabold tracking-[-0.05em] text-white">{value}</p>
-      <p className="mt-1 text-sm text-white/78">{subvalue}</p>
-    </div>
-  );
-}
-
-function HeroBadge({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[1.35rem] border border-white/16 bg-white/10 px-4 py-3 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
-      <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-white/70">{label}</p>
-      <p className="mt-1 text-2xl font-extrabold tracking-[-0.04em] text-white">{value}</p>
-    </div>
-  );
-}
-
-function TinyChip({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded-full bg-[var(--pill)] px-2.5 py-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[var(--muted)]">
-      {children}
-    </span>
-  );
-}
-
-function RewardChip({ xp }: { xp: number }) {
-  return (
-    <span className="rounded-full bg-[var(--sun-soft)] px-2.5 py-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[var(--sun-deep)]">
-      +{xp} XP
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: ReturnType<typeof getRoutineStatus> }) {
   const styles = {
     complete: "bg-emerald-100 text-emerald-800",
     due: "bg-stone-200 text-stone-800",
@@ -822,45 +784,31 @@ function StatusBadge({ status }: { status: ReturnType<typeof getRoutineStatus> }
   } as const;
 
   return (
-    <span className={`rounded-full px-2.5 py-1 text-xs font-extrabold uppercase tracking-[0.12em] ${styles[status]}`}>
-      {status === "off-track" ? "Off Track" : status}
+    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${styles[status]}`}>
+      {status === "off-track" ? "Off track" : status}
     </span>
-  );
-}
-
-function UtilityButton({
-  children,
-  onClick,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button type="button" className={secondaryButtonClassName} onClick={onClick}>
-      {children}
-    </button>
   );
 }
 
 function Toast({ message }: { message: string }) {
   return (
-    <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full bg-[var(--foreground)] px-4 py-2 text-sm font-extrabold text-white shadow-[0_16px_36px_rgba(22,31,26,0.25)]">
+    <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full bg-[var(--foreground)] px-4 py-2 text-sm font-medium text-white shadow-[0_16px_36px_rgba(20,27,24,0.22)]">
       {message}
     </div>
   );
 }
 
 const inputClassName =
-  "w-full rounded-[1.25rem] border-[3px] border-[var(--line-strong)] bg-white px-4 py-3 text-base font-semibold text-[var(--foreground)] outline-none transition placeholder:text-[var(--muted)]/70 focus:border-[var(--accent)]";
+  "w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-base text-[var(--foreground)] outline-none transition placeholder:text-[var(--muted)]/75 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)]";
 
 const primaryButtonClassName =
-  "rounded-[1.2rem] bg-[var(--accent)] px-4 py-3 text-sm font-extrabold uppercase tracking-[0.12em] text-white shadow-[0_4px_0_0_var(--accent-dark)] transition hover:translate-y-[1px] hover:shadow-[0_3px_0_0_var(--accent-dark)]";
+  "rounded-2xl bg-[var(--foreground)] px-4 py-3 text-sm font-medium text-white transition hover:opacity-94";
 
 const secondaryButtonClassName =
-  "rounded-[1.2rem] border-[3px] border-[var(--line-strong)] bg-white px-4 py-3 text-sm font-extrabold uppercase tracking-[0.12em] text-[var(--foreground)] transition hover:bg-[var(--surface-soft)]";
+  "rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--surface-soft)]";
 
 const activePillClassName =
-  "rounded-[1.1rem] bg-[var(--accent)] px-3 py-3 text-sm font-extrabold uppercase tracking-[0.12em] text-white shadow-[0_4px_0_0_var(--accent-dark)] transition hover:translate-y-[1px] hover:shadow-[0_3px_0_0_var(--accent-dark)]";
+  "rounded-full bg-[var(--foreground)] px-3 py-2 text-sm font-medium text-white transition hover:opacity-94";
 
 const secondaryPillClassName =
-  "rounded-[1.1rem] border-[3px] border-[var(--line-strong)] bg-white px-3 py-3 text-sm font-extrabold uppercase tracking-[0.12em] text-[var(--foreground)] transition hover:bg-[var(--surface-soft)]";
+  "rounded-full border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--surface-soft)]";
