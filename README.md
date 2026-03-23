@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Compounders
 
-## Getting Started
+Compounders is a local-first Next.js app for tracking routines you want to keep on a daily, weekly, or monthly cadence. Each routine keeps its own completion history, current streak, best streak, and recent-window consistency so you can see what is compounding over time.
 
-First, run the development server:
+## What it does
+
+- Create routines with a title, cadence, and intention
+- Track daily, weekly, and monthly completions
+- Calculate current streaks and best streaks
+- Highlight routines that are complete, due, or off-track
+- Filter by cadence, status, and search query
+- Edit, archive, restore, and delete routines
+- Export and import data as JSON
+- Persist everything in browser local storage
+
+## Getting started
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). If port `3000` is busy, Next.js will automatically choose another local port and print it in the terminal.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Next.js App Router
+- React
+- TypeScript
+- Tailwind CSS v4
 
-## Learn More
+## Notes
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Data is stored locally in the browser, so it is currently device-specific.
+- Existing `compounders:routines:v1` local storage data is migrated into the newer app shape automatically.

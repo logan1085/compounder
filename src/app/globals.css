@@ -1,26 +1,73 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f3ea;
+  --foreground: #223127;
+  --panel: #fffdf8;
+  --panel-shadow: #e8dfd1;
+  --surface-soft: #f2ede3;
+  --pill: #ece4d7;
+  --border: rgba(34, 49, 39, 0.1);
+  --line-strong: #d4cabb;
+  --muted: #6d776f;
+  --accent: #58b72f;
+  --accent-dark: #429121;
+  --accent-soft: #ddefd2;
+  --sun: #ffd44d;
+  --sun-soft: #fff0b3;
+  --sun-deep: #9d6c00;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-nunito);
+  --font-mono: var(--font-ibm-plex-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.42), transparent 26%),
+    var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-nunito), sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: none;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: rgba(88, 183, 47, 0.22);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
