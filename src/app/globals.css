@@ -1,19 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f5f0;
-  --foreground: #18231f;
-  --panel: #fcfbf8;
-  --surface-soft: #f3efe7;
-  --pill: #ece7de;
-  --border: rgba(24, 35, 31, 0.1);
-  --line-strong: #cdd9d0;
-  --muted: #6a746e;
-  --accent: #0d6b43;
-  --accent-soft: #d9e9df;
-  --streak: #ff8b37;
-  --streak-soft: #ffe5d1;
-  --streak-strong: #a24e11;
+  --background: #eaf3ff;
+  --foreground: #1b2a3a;
+  --muted: #6b7c92;
+  --card: #ffffff;
+  --card-soft: #f1f6ff;
+  --border: rgba(27, 42, 58, 0.08);
+  --accent: #ff8c5a;
+  --accent-soft: #ffe1cf;
+  --accent-strong: #c54f1f;
+  --sky: #b8dcff;
+  --peach: #ffd9c2;
+  --cloud-shadow: 0 24px 60px -24px rgba(88, 118, 170, 0.28);
+  --cloud-shadow-sm: 0 10px 30px -12px rgba(88, 118, 170, 0.22);
 }
 
 @theme inline {
@@ -27,21 +27,54 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  min-height: 100vh;
+}
+
 html {
-  background: var(--background);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #cfe6ff 0%, transparent 60%),
+    radial-gradient(1200px 700px at 110% 110%, #ffe0cc 0%, transparent 55%),
+    linear-gradient(180deg, #e3f0ff 0%, #f4f7ff 45%, #fff3e8 100%);
+  background-attachment: fixed;
   scroll-behavior: smooth;
 }
 
 body {
-  min-height: 100vh;
-  background: var(--background);
+  background: transparent;
   color: var(--foreground);
   font-family: var(--font-manrope), sans-serif;
   -webkit-font-smoothing: antialiased;
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 body::before {
-  content: none;
+  width: 460px;
+  height: 460px;
+  background: #cfe4ff;
+  top: -140px;
+  left: -120px;
+}
+
+body::after {
+  width: 520px;
+  height: 520px;
+  background: #ffd3b8;
+  bottom: -220px;
+  right: -160px;
 }
 
 a {
@@ -49,7 +82,7 @@ a {
 }
 
 ::selection {
-  background: rgba(34, 90, 67, 0.2);
+  background: rgba(255, 140, 90, 0.25);
 }
 
 button,
@@ -62,8 +95,44 @@ button {
   cursor: pointer;
 }
 
+@keyframes float-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.float-in {
+  animation: float-in 0.35s ease-out both;
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.pop {
+  animation: pop 0.35s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+
+  .float-in,
+  .pop {
+    animation: none;
   }
 }

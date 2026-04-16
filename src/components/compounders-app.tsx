@@ -8,15 +8,9 @@ import {
   type Routine,
   findCompletionForPeriod,
   formatDateKey,
-  formatLongDate,
   getActiveRoutines,
   getArchivedRoutines,
-  getBestStreak,
-  getCadenceWindowLabel,
   getCurrentStreak,
-  getLastCompletion,
-  getRoutineStatus,
-  getWindowRangeLabel,
   isCompleteThisPeriod,
   normalizeRoutines,
 } from "@/lib/compounders";
@@ -62,25 +56,6 @@ function createRoutine(values: FormState, count: number): Routine {
     archivedAt: null,
     completions: [],
   };
-}
-
-function sortRoutines(routines: Routine[], now: Date) {
-  const order = {
-    due: 0,
-    "off-track": 1,
-    complete: 2,
-  } as const;
-
-  return [...routines].sort((left, right) => {
-    const statusDelta =
-      order[getRoutineStatus(left, now)] - order[getRoutineStatus(right, now)];
-
-    if (statusDelta !== 0) {
-      return statusDelta;
-    }
-
-    return left.title.localeCompare(right.title);
-  });
 }
 
 function downloadJsonFile(filename: string, data: unknown) {
@@ -151,40 +126,22 @@ export function CompoundersApp() {
       return;
     }
 
-    const timeout = window.setTimeout(() => setToast(null), 2200);
+    const timeout = window.setTimeout(() => setToast(null), 1800);
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
   const activeRoutines = useMemo(() => getActiveRoutines(routines), [routines]);
   const archivedRoutines = useMemo(() => getArchivedRoutines(routines), [routines]);
-  const orderedRoutines = useMemo(
-    () => sortRoutines(activeRoutines, now),
-    [activeRoutines, now],
-  );
-  const pendingRoutines = orderedRoutines.filter(
+  const pendingRoutines = activeRoutines.filter(
     (routine) => !isCompleteThisPeriod(routine, now),
   );
-  const completedRoutines = orderedRoutines.filter((routine) =>
+  const completedRoutines = activeRoutines.filter((routine) =>
     isCompleteThisPeriod(routine, now),
-  );
-  const bestLiveStreak = orderedRoutines.reduce(
-    (best, routine) => Math.max(best, getCurrentStreak(routine, now)),
-    0,
   );
   const completionPercent = activeRoutines.length
     ? Math.round((completedRoutines.length / activeRoutines.length) * 100)
     : 0;
-  const dayPoints = completedRoutines.reduce((sum, routine) => {
-    if (routine.cadence === "daily") {
-      return sum + 10;
-    }
-
-    if (routine.cadence === "weekly") {
-      return sum + 20;
-    }
-
-    return sum + 30;
-  }, 0);
+  const allDone = activeRoutines.length > 0 && pendingRoutines.length === 0;
 
   function showToast(message: string) {
     setToast({
@@ -207,7 +164,6 @@ export function CompoundersApp() {
 
     setProfile({ name: nameInput.trim() });
     setView("today");
-    showToast("Ready.");
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -238,13 +194,13 @@ export function CompoundersApp() {
             : routine,
         ),
       );
-      showToast("Saved.");
+      showToast("Saved");
       resetForm();
       return;
     }
 
     setRoutines((current) => [createRoutine(form, current.length), ...current]);
-    showToast("Added.");
+    showToast("Added");
     resetForm();
   }
 
@@ -262,9 +218,6 @@ export function CompoundersApp() {
   }
 
   function toggleRoutineCompletion(routineId: string) {
-    const target = routines.find((routine) => routine.id === routineId);
-    const wasComplete = target ? Boolean(findCompletionForPeriod(target, now)) : false;
-
     setRoutines((current) =>
       current.map((routine) => {
         if (routine.id !== routineId) {
@@ -288,12 +241,6 @@ export function CompoundersApp() {
         };
       }),
     );
-
-    showToast(
-      wasComplete
-        ? `Undid ${getCadenceWindowLabel(target?.cadence ?? "daily")}.`
-        : `Completed ${getCadenceWindowLabel(target?.cadence ?? "daily")}.`,
-    );
   }
 
   function archiveRoutine(routineId: string) {
@@ -313,7 +260,7 @@ export function CompoundersApp() {
       resetForm();
     }
 
-    showToast("Archived.");
+    showToast("Archived");
   }
 
   function restoreRoutine(routineId: string) {
@@ -328,8 +275,7 @@ export function CompoundersApp() {
           : routine,
       ),
     );
-    setShowArchived(false);
-    showToast("Restored.");
+    showToast("Restored");
   }
 
   function deleteRoutine(routineId: string) {
@@ -343,7 +289,7 @@ export function CompoundersApp() {
       resetForm();
     }
 
-    showToast("Deleted.");
+    showToast("Deleted");
   }
 
   function exportData() {
@@ -352,7 +298,7 @@ export function CompoundersApp() {
       profile,
       routines,
     });
-    showToast("Exported.");
+    showToast("Exported");
   }
 
   function handleImport(event: ChangeEvent<HTMLInputElement>) {
@@ -390,7 +336,7 @@ export function CompoundersApp() {
         }
 
         resetForm();
-        showToast("Imported.");
+        showToast("Imported");
       } catch (error) {
         console.error("Unable to import Compounders data", error);
         window.alert("That file could not be imported.");
@@ -405,35 +351,24 @@ export function CompoundersApp() {
 
   if (!profile) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-3xl items-center px-4 py-12 sm:px-6">
-        <section className="w-full rounded-[2rem] border border-[var(--border)] bg-white p-8 shadow-[0_12px_32px_rgba(20,27,24,0.05)] sm:p-10">
-          <div className="space-y-4">
-            <div className="inline-flex items-center rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
-              Compounders
-            </div>
-            <div className="space-y-2">
-              <h1 className="text-4xl font-semibold tracking-[-0.05em] text-[var(--foreground)] sm:text-5xl">
-                Simple personal tracker.
-              </h1>
-              <p className="max-w-xl text-base leading-7 text-[var(--muted)]">
-                Enter your name once, then use one page to add actions and one page to
-                mark whether you did them.
-              </p>
-            </div>
-          </div>
-
-          <form className="mt-8 space-y-4" onSubmit={saveName}>
-            <label className="grid gap-2">
-              <span className="text-sm font-medium text-[var(--foreground)]">Your name</span>
-              <input
-                className={inputClassName}
-                placeholder="Logan"
-                value={nameInput}
-                onChange={(event) => setNameInput(event.target.value)}
-              />
-            </label>
+      <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-5 py-12">
+        <section className="float-in w-full rounded-[2.25rem] border border-white/70 bg-white/75 p-8 shadow-[var(--cloud-shadow)] backdrop-blur-md">
+          <h1 className="text-4xl font-semibold tracking-[-0.04em] text-[var(--foreground)] sm:text-5xl">
+            Hello there.
+          </h1>
+          <p className="mt-3 text-base leading-7 text-[var(--muted)]">
+            What should I call you?
+          </p>
+          <form className="mt-6 space-y-3" onSubmit={saveName}>
+            <input
+              className={inputClassName}
+              placeholder="Your name"
+              value={nameInput}
+              onChange={(event) => setNameInput(event.target.value)}
+              autoFocus
+            />
             <button type="submit" className={primaryButtonClassName}>
-              Continue
+              Let&apos;s go
             </button>
           </form>
         </section>
@@ -442,39 +377,31 @@ export function CompoundersApp() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12">
-      <header className="space-y-4">
-        <div className="inline-flex items-center rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
-          Compounders
-        </div>
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-[var(--muted)]">
-            {new Intl.DateTimeFormat("en-US", {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-            }).format(now)}
-          </p>
-          <h1 className="text-4xl font-semibold tracking-[-0.05em] text-[var(--foreground)] sm:text-5xl">
-            Hi {profile.name}.
-          </h1>
-          <p className="max-w-2xl text-base leading-7 text-[var(--muted)]">
-            Use `Today` to check off actions. Use `Setup` to add or edit them.
-          </p>
-        </div>
+    <main className="mx-auto w-full max-w-2xl px-5 py-8 sm:py-12">
+      <header className="float-in mb-8 space-y-1">
+        <p className="text-sm font-medium text-[var(--muted)]">
+          {new Intl.DateTimeFormat("en-US", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+          }).format(now)}
+        </p>
+        <h1 className="text-4xl font-semibold tracking-[-0.05em] text-[var(--foreground)] sm:text-5xl">
+          Hi {profile.name}.
+        </h1>
       </header>
 
-      <nav className="flex gap-2">
+      <nav className="mb-6 inline-flex gap-1 rounded-full border border-white/70 bg-white/60 p-1 shadow-[var(--cloud-shadow-sm)] backdrop-blur">
         <button
           type="button"
-          className={view === "today" ? activePillClassName : secondaryPillClassName}
+          className={view === "today" ? activeTabClassName : tabClassName}
           onClick={() => setView("today")}
         >
           Today
         </button>
         <button
           type="button"
-          className={view === "setup" ? activePillClassName : secondaryPillClassName}
+          className={view === "setup" ? activeTabClassName : tabClassName}
           onClick={() => setView("setup")}
         >
           Setup
@@ -482,248 +409,179 @@ export function CompoundersApp() {
       </nav>
 
       {view === "today" ? (
-        <>
-          <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-            <section className="rounded-[2rem] border border-[var(--border)] bg-white p-5 shadow-[0_10px_30px_rgba(20,27,24,0.05)] sm:p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-[var(--muted)]">Today&apos;s score</p>
-                  <h2 className="text-4xl font-semibold tracking-[-0.05em] text-[var(--foreground)]">
-                    {completionPercent}%
-                  </h2>
-                  <p className="text-sm leading-6 text-[var(--muted)]">
-                    {completedRoutines.length} of {activeRoutines.length} actions completed.
+        <section className="space-y-3">
+          {activeRoutines.length === 0 ? (
+            <EmptyCloud
+              title="Nothing here yet."
+              body="Pop over to Setup and add your first action."
+            />
+          ) : (
+            <>
+              <div className="float-in mb-5 rounded-[1.75rem] border border-white/70 bg-white/75 px-5 py-4 shadow-[var(--cloud-shadow-sm)] backdrop-blur">
+                <div className="flex items-baseline justify-between">
+                  <p className="text-sm font-medium text-[var(--muted)]">
+                    {allDone ? "All done today " : "Today"}
+                  </p>
+                  <p className="text-sm font-semibold text-[var(--foreground)]">
+                    {completedRoutines.length} / {activeRoutines.length}
                   </p>
                 </div>
-                <div className="rounded-[1.4rem] bg-[var(--surface-soft)] px-4 py-3 text-right">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                    Points
-                  </p>
-                  <p className="mt-1 text-3xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
-                    {dayPoints}
-                  </p>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--card-soft)]">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[var(--accent)] to-[#ffb37a] transition-all duration-500 ease-out"
+                    style={{ width: `${completionPercent}%` }}
+                  />
                 </div>
               </div>
 
-              <div className="mt-5 h-3 overflow-hidden rounded-full bg-[var(--surface-soft)]">
-                <div
-                  className="h-full rounded-full bg-[var(--accent)] transition-all duration-300"
-                  style={{ width: `${Math.max(completionPercent, activeRoutines.length ? 8 : 0)}%` }}
+              {pendingRoutines.map((routine) => (
+                <TodayCard
+                  key={routine.id}
+                  routine={routine}
+                  now={now}
+                  complete={false}
+                  onToggle={() => toggleRoutineCompletion(routine.id)}
                 />
-              </div>
-            </section>
+              ))}
 
-            <section className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-              <TopMetric label="Still to do" value={`${pendingRoutines.length}`} />
-              <TopMetric label="Done today" value={`${completedRoutines.length}`} />
-              <TopMetric label="Best live streak" value={`${bestLiveStreak}`} />
-            </section>
-          </section>
-
-          <section className="rounded-[2rem] border border-[var(--border)] bg-white shadow-[0_10px_30px_rgba(20,27,24,0.05)]">
-            <div className="border-b border-[var(--border)] px-5 py-5 sm:px-6">
-              <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
-                Actions for today
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                Just answer whether you did them.
-              </p>
-            </div>
-
-            <div className="space-y-6 px-5 py-5 sm:px-6">
-              {pendingRoutines.length === 0 ? (
-                <div className="rounded-[1.5rem] border border-dashed border-[var(--border)] bg-[var(--panel)] px-6 py-10 text-center">
-                  <p className="text-lg font-medium text-[var(--foreground)]">
-                    Nothing due right now.
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                    You’ve handled everything currently due.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {pendingRoutines.map((routine) => (
-                    <TodayRow
-                      key={routine.id}
-                      routine={routine}
-                      now={now}
-                      onToggle={() => toggleRoutineCompletion(routine.id)}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {completedRoutines.length > 0 ? (
-                <div className="space-y-3 border-t border-[var(--border)] pt-6">
-                  <p className="text-sm font-medium text-[var(--muted)]">Completed</p>
-                  {completedRoutines.map((routine) => (
-                    <TodayRow
-                      key={routine.id}
-                      routine={routine}
-                      now={now}
-                      complete
-                      onToggle={() => toggleRoutineCompletion(routine.id)}
-                    />
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </section>
-        </>
+              {completedRoutines.map((routine) => (
+                <TodayCard
+                  key={routine.id}
+                  routine={routine}
+                  now={now}
+                  complete
+                  onToggle={() => toggleRoutineCompletion(routine.id)}
+                />
+              ))}
+            </>
+          )}
+        </section>
       ) : (
-        <section
-          ref={formRef}
-          className="space-y-6 rounded-[2rem] border border-[var(--border)] bg-white p-5 shadow-[0_10px_30px_rgba(20,27,24,0.05)] sm:p-6"
-        >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
-                {editingId ? "Edit action" : "Add action"}
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                This page is only for entering and managing what appears on `Today`.
-              </p>
-            </div>
+        <section className="space-y-5">
+          <div
+            ref={formRef}
+            className="float-in rounded-[2rem] border border-white/70 bg-white/80 p-5 shadow-[var(--cloud-shadow)] backdrop-blur sm:p-6"
+          >
+            <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--foreground)]">
+              {editingId ? "Edit action" : "Add an action"}
+            </h2>
 
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className={secondaryButtonClassName} onClick={exportData}>
-                Export
-              </button>
-              <button
-                type="button"
-                className={secondaryButtonClassName}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                Import
-              </button>
-              <button
-                type="button"
-                className={secondaryButtonClassName}
-                onClick={() => {
-                  setProfile(null);
-                  localStorage.removeItem(PROFILE_KEY);
-                }}
-              >
-                Change name
-              </button>
+            <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
               <input
-                ref={fileInputRef}
-                className="hidden"
-                type="file"
-                accept="application/json"
-                onChange={handleImport}
+                className={inputClassName}
+                placeholder="Read for 20 minutes"
+                value={form.title}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, title: event.target.value }))
+                }
               />
-            </div>
-          </div>
 
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div className="grid gap-4 sm:grid-cols-[1.25fr_0.95fr]">
-              <label className="grid gap-2">
-                <span className="text-sm font-medium text-[var(--foreground)]">Action</span>
-                <input
-                  className={inputClassName}
-                  placeholder="Read for 20 minutes"
-                  value={form.title}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, title: event.target.value }))
-                  }
-                />
-              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {CADENCE_ORDER.map((cadence) => (
+                  <button
+                    key={cadence}
+                    type="button"
+                    className={
+                      form.cadence === cadence ? activeChipClassName : chipClassName
+                    }
+                    onClick={() =>
+                      setForm((current) => ({ ...current, cadence }))
+                    }
+                  >
+                    {CADENCE_LABELS[cadence]}
+                  </button>
+                ))}
+              </div>
 
-              <label className="grid gap-2">
-                <span className="text-sm font-medium text-[var(--foreground)]">Cadence</span>
-                <div className="grid grid-cols-3 gap-2">
-                  {CADENCE_ORDER.map((cadence) => (
-                    <button
-                      key={cadence}
-                      type="button"
-                      className={
-                        form.cadence === cadence ? activePillClassName : secondaryPillClassName
-                      }
-                      onClick={() =>
-                        setForm((current) => ({
-                          ...current,
-                          cadence,
-                        }))
-                      }
-                    >
-                      {CADENCE_LABELS[cadence]}
-                    </button>
-                  ))}
-                </div>
-              </label>
-            </div>
-
-            <label className="grid gap-2">
-              <span className="text-sm font-medium text-[var(--foreground)]">Note</span>
               <textarea
-                className={`${inputClassName} min-h-24 resize-none`}
-                placeholder="Optional context"
+                className={`${inputClassName} min-h-20 resize-none`}
+                placeholder="Why (optional)"
                 value={form.intention}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, intention: event.target.value }))
                 }
               />
-            </label>
 
-            <div className="flex flex-wrap gap-3">
-              <button type="submit" className={primaryButtonClassName}>
-                {editingId ? "Save changes" : "Add action"}
-              </button>
-              {editingId ? (
-                <button type="button" className={secondaryButtonClassName} onClick={resetForm}>
-                  Cancel
+              <div className="flex gap-2">
+                <button type="submit" className={primaryButtonClassName}>
+                  {editingId ? "Save" : "Add"}
                 </button>
-              ) : null}
-            </div>
-          </form>
+                {editingId ? (
+                  <button
+                    type="button"
+                    className={secondaryButtonClassName}
+                    onClick={resetForm}
+                  >
+                    Cancel
+                  </button>
+                ) : null}
+              </div>
+            </form>
+          </div>
 
-          <div className="space-y-3 border-t border-[var(--border)] pt-6">
-            <p className="text-sm font-medium text-[var(--muted)]">Current actions</p>
-            {orderedRoutines.length === 0 ? (
-              <p className="text-sm leading-6 text-[var(--muted)]">
-                No actions yet. Add your first one above.
-              </p>
-            ) : (
-              orderedRoutines.map((routine) => (
-                <SetupRow
+          {activeRoutines.length > 0 ? (
+            <div className="space-y-2">
+              {activeRoutines.map((routine) => (
+                <SetupCard
                   key={routine.id}
                   routine={routine}
                   now={now}
                   onEdit={() => handleEdit(routine)}
                   onArchive={() => archiveRoutine(routine.id)}
                 />
-              ))
-            )}
-          </div>
-
-          <div className="space-y-3 border-t border-[var(--border)] pt-6">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-[var(--muted)]">Archived</p>
-              <button
-                type="button"
-                className={secondaryButtonClassName}
-                onClick={() => setShowArchived((current) => !current)}
-              >
-                {showArchived ? "Hide" : `Show ${archivedRoutines.length}`}
-              </button>
+              ))}
             </div>
+          ) : null}
 
-            {showArchived ? (
-              archivedRoutines.length === 0 ? (
-                <p className="text-sm leading-6 text-[var(--muted)]">Nothing archived yet.</p>
-              ) : (
-                archivedRoutines.map((routine) => (
-                  <ArchivedRow
-                    key={routine.id}
-                    routine={routine}
-                    onRestore={() => restoreRoutine(routine.id)}
-                    onDelete={() => deleteRoutine(routine.id)}
-                  />
-                ))
-              )
-            ) : null}
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            <button type="button" className={ghostButtonClassName} onClick={exportData}>
+              Export
+            </button>
+            <button
+              type="button"
+              className={ghostButtonClassName}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Import
+            </button>
+            <button
+              type="button"
+              className={ghostButtonClassName}
+              onClick={() => setShowArchived((current) => !current)}
+            >
+              {showArchived ? "Hide archived" : `Archived (${archivedRoutines.length})`}
+            </button>
+            <button
+              type="button"
+              className={ghostButtonClassName}
+              onClick={() => {
+                setProfile(null);
+                localStorage.removeItem(PROFILE_KEY);
+              }}
+            >
+              Change name
+            </button>
+            <input
+              ref={fileInputRef}
+              className="hidden"
+              type="file"
+              accept="application/json"
+              onChange={handleImport}
+            />
           </div>
+
+          {showArchived && archivedRoutines.length > 0 ? (
+            <div className="space-y-2 pt-2">
+              {archivedRoutines.map((routine) => (
+                <ArchivedCard
+                  key={routine.id}
+                  routine={routine}
+                  onRestore={() => restoreRoutine(routine.id)}
+                  onDelete={() => deleteRoutine(routine.id)}
+                />
+              ))}
+            </div>
+          ) : null}
         </section>
       )}
 
@@ -732,61 +590,75 @@ export function CompoundersApp() {
   );
 }
 
-function TodayRow({
+function TodayCard({
   routine,
   now,
-  complete = false,
+  complete,
   onToggle,
 }: {
   routine: Routine;
   now: Date;
-  complete?: boolean;
+  complete: boolean;
   onToggle: () => void;
 }) {
-  const lastCompletion = getLastCompletion(routine);
-  const currentStreak = getCurrentStreak(routine, now);
-  const status = getRoutineStatus(routine, now);
+  const streak = getCurrentStreak(routine, now);
 
   return (
-    <article
-      className={`rounded-[1.5rem] border px-4 py-4 sm:px-5 ${
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`float-in group w-full rounded-[1.75rem] border px-5 py-4 text-left transition-all duration-200 hover:-translate-y-0.5 ${
         complete
-          ? "border-[var(--border)] bg-[var(--surface-soft)]"
-          : "border-[var(--line-strong)] bg-white shadow-[0_6px_20px_rgba(20,27,24,0.04)]"
+          ? "border-[var(--accent-soft)] bg-[var(--accent-soft)]/60 backdrop-blur"
+          : "border-white/70 bg-white/80 shadow-[var(--cloud-shadow-sm)] backdrop-blur hover:shadow-[var(--cloud-shadow)]"
       }`}
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-xl font-semibold tracking-[-0.03em] text-[var(--foreground)]">
-              {routine.title}
-            </h3>
-            <span className="rounded-full bg-[var(--pill)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">
-              {CADENCE_LABELS[routine.cadence]}
-            </span>
-            <StreakChip streak={currentStreak} />
-            <StatusBadge status={status} />
-          </div>
-          <p className="text-sm leading-6 text-[var(--muted)]">
-            {routine.intention || "No note."}
+      <div className="flex items-center gap-4">
+        <span
+          className={`flex h-11 w-11 flex-none items-center justify-center rounded-full border-2 transition-all ${
+            complete
+              ? "pop border-[var(--accent)] bg-[var(--accent)] text-white"
+              : "border-[var(--muted)]/30 bg-white group-hover:border-[var(--accent)]"
+          }`}
+        >
+          {complete ? (
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M5 12.5l4.5 4.5L19 7" />
+            </svg>
+          ) : null}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p
+            className={`truncate text-lg font-semibold tracking-[-0.02em] ${
+              complete ? "text-[var(--muted)] line-through decoration-[var(--muted)]/40" : "text-[var(--foreground)]"
+            }`}
+          >
+            {routine.title}
           </p>
-          <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-[var(--muted)]">
-            <span>{getWindowRangeLabel(routine.cadence, now)}</span>
-            <span>{lastCompletion ? `Last ${formatLongDate(lastCompletion)}` : "Not started yet"}</span>
+          <div className="mt-0.5 flex items-center gap-2 text-xs text-[var(--muted)]">
+            <span>{CADENCE_LABELS[routine.cadence]}</span>
+            {streak > 0 ? (
+              <>
+                <span aria-hidden>·</span>
+                <span className="font-medium text-[var(--accent-strong)]">{streak} streak</span>
+              </>
+            ) : null}
           </div>
         </div>
-
-        <button type="button" className={primaryButtonClassName} onClick={onToggle}>
-          {complete
-            ? `Undo ${getCadenceWindowLabel(routine.cadence)}`
-            : `Did this ${getCadenceWindowLabel(routine.cadence)}`}
-        </button>
       </div>
-    </article>
+    </button>
   );
 }
 
-function SetupRow({
+function SetupCard({
   routine,
   now,
   onEdit,
@@ -797,29 +669,22 @@ function SetupRow({
   onEdit: () => void;
   onArchive: () => void;
 }) {
-  const status = getRoutineStatus(routine, now);
-  const currentStreak = getCurrentStreak(routine, now);
-  const bestStreak = getBestStreak(routine);
+  const streak = getCurrentStreak(routine, now);
 
   return (
-    <div className="flex flex-col gap-3 rounded-[1.4rem] border border-[var(--border)] bg-[var(--panel)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 rounded-[1.5rem] border border-white/70 bg-white/70 px-4 py-3.5 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="font-medium text-[var(--foreground)]">{routine.title}</p>
-          <span className="rounded-full bg-[var(--pill)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">
-            {CADENCE_LABELS[routine.cadence]}
-          </span>
-          <StatusBadge status={status} />
-        </div>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          {currentStreak} current streak • {bestStreak} best
+        <p className="truncate font-semibold text-[var(--foreground)]">{routine.title}</p>
+        <p className="mt-0.5 text-xs text-[var(--muted)]">
+          {CADENCE_LABELS[routine.cadence]}
+          {streak > 0 ? ` · ${streak} streak` : ""}
         </p>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <button type="button" className={secondaryButtonClassName} onClick={onEdit}>
+      <div className="flex gap-2">
+        <button type="button" className={ghostButtonClassName} onClick={onEdit}>
           Edit
         </button>
-        <button type="button" className={secondaryButtonClassName} onClick={onArchive}>
+        <button type="button" className={ghostButtonClassName} onClick={onArchive}>
           Archive
         </button>
       </div>
@@ -827,7 +692,7 @@ function SetupRow({
   );
 }
 
-function ArchivedRow({
+function ArchivedCard({
   routine,
   onRestore,
   onDelete,
@@ -837,18 +702,18 @@ function ArchivedRow({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-[1.4rem] border border-[var(--border)] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 rounded-[1.5rem] border border-white/60 bg-white/50 px-4 py-3.5 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="font-medium text-[var(--foreground)]">{routine.title}</p>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          {CADENCE_LABELS[routine.cadence]} • archived {formatLongDate(routine.archivedAt ?? routine.updatedAt)}
+        <p className="font-medium text-[var(--muted)]">{routine.title}</p>
+        <p className="mt-0.5 text-xs text-[var(--muted)]">
+          {CADENCE_LABELS[routine.cadence]} · archived
         </p>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <button type="button" className={secondaryButtonClassName} onClick={onRestore}>
+      <div className="flex gap-2">
+        <button type="button" className={ghostButtonClassName} onClick={onRestore}>
           Restore
         </button>
-        <button type="button" className={secondaryButtonClassName} onClick={onDelete}>
+        <button type="button" className={ghostButtonClassName} onClick={onDelete}>
           Delete
         </button>
       </div>
@@ -856,63 +721,43 @@ function ArchivedRow({
   );
 }
 
-function TopMetric({ label, value }: { label: string; value: string }) {
+function EmptyCloud({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-[1.6rem] border border-[var(--border)] bg-white px-4 py-4 shadow-[0_6px_18px_rgba(20,27,24,0.03)]">
-      <p className="text-sm font-medium text-[var(--muted)]">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
-        {value}
-      </p>
+    <div className="float-in rounded-[2rem] border border-white/70 bg-white/70 px-6 py-12 text-center shadow-[var(--cloud-shadow-sm)] backdrop-blur">
+      <p className="text-lg font-semibold text-[var(--foreground)]">{title}</p>
+      <p className="mt-2 text-sm text-[var(--muted)]">{body}</p>
     </div>
-  );
-}
-
-function StreakChip({ streak }: { streak: number }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--streak-soft)] px-2.5 py-1 text-xs font-medium text-[var(--streak-strong)]">
-      <span className="h-2 w-2 rounded-full bg-[var(--streak)]" />
-      {streak} streak
-    </span>
-  );
-}
-
-function StatusBadge({
-  status,
-}: {
-  status: ReturnType<typeof getRoutineStatus>;
-}) {
-  const styles = {
-    complete: "bg-emerald-100 text-emerald-800",
-    due: "bg-stone-200 text-stone-800",
-    "off-track": "bg-amber-100 text-amber-900",
-  } as const;
-
-  return (
-    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${styles[status]}`}>
-      {status === "off-track" ? "Off track" : status}
-    </span>
   );
 }
 
 function Toast({ message }: { message: string }) {
   return (
-    <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full bg-[var(--foreground)] px-4 py-2 text-sm font-medium text-white shadow-[0_16px_36px_rgba(20,27,24,0.22)]">
+    <div className="float-in fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-white/70 bg-white/90 px-4 py-2 text-sm font-medium text-[var(--foreground)] shadow-[var(--cloud-shadow)] backdrop-blur">
       {message}
     </div>
   );
 }
 
 const inputClassName =
-  "w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-base text-[var(--foreground)] outline-none transition placeholder:text-[var(--muted)]/75 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)]";
+  "w-full rounded-2xl border border-white/70 bg-white/90 px-4 py-3 text-base text-[var(--foreground)] outline-none transition placeholder:text-[var(--muted)]/70 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]";
 
 const primaryButtonClassName =
-  "rounded-2xl bg-[var(--foreground)] px-4 py-3 text-sm font-medium text-white transition hover:opacity-94";
+  "rounded-full bg-[var(--foreground)] px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-[var(--cloud-shadow-sm)]";
 
 const secondaryButtonClassName =
-  "rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--surface-soft)]";
+  "rounded-full border border-white/70 bg-white/70 px-5 py-3 text-sm font-semibold text-[var(--foreground)] transition hover:bg-white";
 
-const activePillClassName =
-  "rounded-full bg-[var(--foreground)] px-3 py-2 text-sm font-medium text-white transition hover:opacity-94";
+const ghostButtonClassName =
+  "rounded-full border border-white/60 bg-white/50 px-3.5 py-1.5 text-xs font-medium text-[var(--muted)] transition hover:bg-white/80 hover:text-[var(--foreground)]";
 
-const secondaryPillClassName =
-  "rounded-full border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--surface-soft)]";
+const tabClassName =
+  "rounded-full px-4 py-2 text-sm font-semibold text-[var(--muted)] transition hover:text-[var(--foreground)]";
+
+const activeTabClassName =
+  "rounded-full bg-[var(--foreground)] px-4 py-2 text-sm font-semibold text-white shadow-[var(--cloud-shadow-sm)]";
+
+const chipClassName =
+  "rounded-full border border-white/70 bg-white/70 px-3 py-2.5 text-sm font-medium text-[var(--muted)] transition hover:bg-white hover:text-[var(--foreground)]";
+
+const activeChipClassName =
+  "rounded-full bg-[var(--foreground)] px-3 py-2.5 text-sm font-semibold text-white shadow-[var(--cloud-shadow-sm)]";
