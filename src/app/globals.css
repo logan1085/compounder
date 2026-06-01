@@ -14,6 +14,8 @@
   --peach: #ffd9c2;
   --cloud-shadow: 0 24px 60px -24px rgba(88, 118, 170, 0.28);
   --cloud-shadow-sm: 0 10px 30px -12px rgba(88, 118, 170, 0.22);
+  --cloud-shadow-lg: 0 32px 80px -20px rgba(88, 118, 170, 0.35);
+  --complete-tint: rgba(74, 222, 128, 0.06);
 }
 
 @theme inline {
@@ -95,6 +97,7 @@ button {
   cursor: pointer;
 }
 
+/* --- Float in --- */
 @keyframes float-in {
   from {
     opacity: 0;
@@ -110,6 +113,12 @@ button {
   animation: float-in 0.35s ease-out both;
 }
 
+/* --- Stagger float-in for landing preview items --- */
+.stagger-1 { animation-delay: 0.08s; }
+.stagger-2 { animation-delay: 0.16s; }
+.stagger-3 { animation-delay: 0.24s; }
+
+/* --- Pop (checkmark) --- */
 @keyframes pop {
   0% {
     transform: scale(1);
@@ -126,13 +135,207 @@ button {
   animation: pop 0.35s ease-out;
 }
 
+/* --- Checkmark draw animation --- */
+@keyframes check-draw {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.check-draw {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 0;
+  animation: check-draw 0.35s ease-out;
+}
+
+/* --- Streak glow --- */
+@keyframes streak-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 140, 90, 0);
+    transform: scale(1);
+  }
+  30% {
+    box-shadow: 0 0 16px 6px rgba(255, 140, 90, 0.45);
+    transform: scale(1.12);
+  }
+  60% {
+    box-shadow: 0 0 24px 10px rgba(255, 180, 50, 0.3);
+    transform: scale(1.06);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 140, 90, 0);
+    transform: scale(1);
+  }
+}
+
+.streak-glow {
+  animation: streak-glow 0.8s ease-out;
+}
+
+/* --- Streak text --- */
+@keyframes streak-text {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  75% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.streak-text {
+  animation: streak-text 2.4s ease-in-out forwards;
+}
+
+/* --- View transition crossfade --- */
+@keyframes view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.view-transition {
+  animation: view-enter 0.3s ease-out both;
+}
+
+/* --- Toast slide up --- */
+@keyframes toast-slide-up {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 16px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes toast-fade-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+}
+
+.toast-enter {
+  animation: toast-slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.toast-exit {
+  animation: toast-fade-out 0.25s ease-in both;
+}
+
+/* --- Starter pill bounce on add --- */
+@keyframes pill-pop {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(0.92);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.pill-pop {
+  animation: pill-pop 0.3s ease-out;
+}
+
+/* --- Progress ring --- */
+.progress-ring-track {
+  stroke: var(--card-soft);
+  fill: none;
+}
+
+.progress-ring-fill {
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- Heatmap tooltip --- */
+.heatmap-cell {
+  position: relative;
+}
+
+.heatmap-today {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+/* --- Card press state --- */
+.card-interactive {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-interactive:hover {
+  transform: translateY(-2px);
+}
+
+.card-interactive:active {
+  transform: translateY(0) scale(0.985);
+  transition-duration: 0.1s;
+}
+
+/* --- Completed card tint --- */
+.card-complete {
+  background: linear-gradient(
+    135deg,
+    rgba(74, 222, 128, 0.05) 0%,
+    rgba(74, 222, 128, 0.02) 50%,
+    rgba(255, 255, 255, 0.6) 100%
+  );
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
 
   .float-in,
-  .pop {
+  .pop,
+  .streak-glow,
+  .streak-text,
+  .view-transition,
+  .toast-enter,
+  .toast-exit,
+  .pill-pop,
+  .check-draw {
     animation: none;
+  }
+
+  .card-interactive {
+    transition: none;
+  }
+
+  .card-interactive:hover,
+  .card-interactive:active {
+    transform: none;
   }
 }

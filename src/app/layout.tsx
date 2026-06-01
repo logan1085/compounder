@@ -14,9 +14,15 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Compounders",
+  title: "Compounders — Track What Compounds",
   description:
-    "Track the daily, weekly, and monthly routines you want to compound with streaks.",
+    "The simplest habit tracker that works. No signup, no cloud. Just you and your streaks.",
+  openGraph: {
+    title: "Compounders — Track What Compounds",
+    description:
+      "The simplest habit tracker that works. No signup, no cloud. Just you and your streaks.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -29,6 +35,10 @@ export default function RootLayout({
       lang="en"
       className={`${manrope.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#1b2a3a" />
+      </head>
       <body className="min-h-full font-sans text-[var(--foreground)]">
         {children}
       </body>

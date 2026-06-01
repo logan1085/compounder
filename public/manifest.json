@@ -1,0 +1,13 @@
+{
+  "name": "Compounders",
+  "short_name": "Compounders",
+  "description": "Track what compounds. No account needed.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eaf3ff",
+  "theme_color": "#1b2a3a",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
