@@ -18,8 +18,12 @@ import {
 const STORAGE_KEY = "compounders:routines:v2";
 const LEGACY_STORAGE_KEY = "compounders:routines:v1";
 const PROFILE_KEY = "compounders:profile:v1";
+const FIRST_USE_KEY = "compounders:firstUse:v1";
+const A2HS_DISMISSED_KEY = "compounders:a2hs:dismissed";
 
 const STREAK_MILESTONES = [7, 14, 30, 60, 100];
+
+const APP_URL = "compounders.vercel.app";
 
 type FormState = {
   title: string;
@@ -41,6 +45,7 @@ type ToastState = {
 
 type CelebrationState = {
   routineId: string;
+  routineTitle: string;
   streak: number;
   id: number;
 };
@@ -100,6 +105,33 @@ function getEmojiForRoutine(title: string): string {
   if (lower.includes("cook") || lower.includes("meal")) return "\u{1F373}";
   if (lower.includes("clean")) return "\u{2728}";
   return "\u{1F525}";
+}
+
+/* ------------------------------------------------------------------ */
+/*  Helper: days since first use                                       */
+/* ------------------------------------------------------------------ */
+
+function getDaysSinceFirstUse(): number {
+  try {
+    const stored = localStorage.getItem(FIRST_USE_KEY);
+    if (!stored) {
+      localStorage.setItem(FIRST_USE_KEY, new Date().toISOString());
+      return 0;
+    }
+    const firstUse = new Date(stored);
+    const now = new Date();
+    return Math.floor((now.getTime() - firstUse.getTime()) / (1000 * 60 * 60 * 24));
+  } catch {
+    return 0;
+  }
+}
+
+function isA2HSDismissed(): boolean {
+  try {
+    return localStorage.getItem(A2HS_DISMISSED_KEY) === "true";
+  } catch {
+    return false;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -173,6 +205,7 @@ export function CompoundersApp() {
   const [celebration, setCelebration] = useState<CelebrationState | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [removedStarters, setRemovedStarters] = useState<Set<string>>(new Set());
+  const [showA2HSBanner, setShowA2HSBanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -198,6 +231,13 @@ export function CompoundersApp() {
 
       if (source) {
         setRoutines(normalizeRoutines(JSON.parse(source)));
+      }
+
+      // Check if we should show "Add to Home Screen" banner
+      const daysSinceFirstUse = getDaysSinceFirstUse();
+      const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
+      if (daysSinceFirstUse >= 3 && !isA2HSDismissed() && !isStandalone) {
+        setShowA2HSBanner(true);
       }
     } catch (error) {
       console.error("Unable to restore Compounders data", error);
@@ -241,7 +281,7 @@ export function CompoundersApp() {
       return;
     }
 
-    const timeout = window.setTimeout(() => setCelebration(null), 2600);
+    const timeout = window.setTimeout(() => setCelebration(null), 4000);
     return () => window.clearTimeout(timeout);
   }, [celebration]);
 
@@ -400,7 +440,7 @@ export function CompoundersApp() {
         };
         const newStreak = getCurrentStreak(updatedRoutine, now);
         if (STREAK_MILESTONES.includes(newStreak)) {
-          setCelebration({ routineId, streak: newStreak, id: Date.now() });
+          setCelebration({ routineId, routineTitle: routine.title, streak: newStreak, id: Date.now() });
         }
 
         return updatedRoutine;
@@ -480,13 +520,30 @@ export function CompoundersApp() {
       return;
     }
 
-    const text = `My Compounders Streaks:\n${lines.join("\n")}\ncompounders.app`;
+    const text = `\u{1F525} My streak report from Compounders\n\n${lines.join("\n")}\n\nTrack your habits \u2192 ${APP_URL}`;
     navigator.clipboard.writeText(text).then(
-      () => showToast("Copied to clipboard"),
+      () => showToast("Copied to clipboard!"),
       () => showToast("Unable to copy"),
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRoutines, now]);
+
+  function shareMilestone(routineTitle: string, streak: number) {
+    const text = `\u{1F525} Just hit a ${streak}-day streak on ${routineTitle} with Compounders! ${APP_URL}`;
+    navigator.clipboard.writeText(text).then(
+      () => showToast("Copied to clipboard!"),
+      () => showToast("Unable to copy"),
+    );
+  }
+
+  function dismissA2HS() {
+    setShowA2HSBanner(false);
+    try {
+      localStorage.setItem(A2HS_DISMISSED_KEY, "true");
+    } catch {
+      // ignore
+    }
+  }
 
   function handleImport(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -555,6 +612,9 @@ export function CompoundersApp() {
           <p className="mx-auto mt-5 max-w-sm text-base leading-7 text-[var(--muted)]">
             The simplest habit tracker that works. No signup, no cloud, no data
             harvesting. Just you and your streaks.
+          </p>
+          <p className="mt-3 text-sm font-medium text-[var(--accent-strong)]">
+            Join 1,000+ people building better habits
           </p>
         </section>
 
@@ -633,6 +693,36 @@ export function CompoundersApp() {
           </div>
         </section>
 
+        {/* How it works section */}
+        <section
+          className="float-in mb-10 w-full"
+          style={{ animationDelay: "0.15s" }}
+        >
+          <h2 className="mb-5 text-center text-lg font-semibold tracking-[-0.02em] text-[var(--foreground)]">
+            How it works
+          </h2>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { step: "1", title: "Add your routines", icon: "\u{2795}" },
+              { step: "2", title: "Check in daily", icon: "\u{2705}" },
+              { step: "3", title: "Watch your streaks grow", icon: "\u{1F525}" },
+            ].map((item) => (
+              <div
+                key={item.step}
+                className="flex flex-col items-center rounded-2xl border border-white/60 bg-white/60 px-3 py-5 text-center backdrop-blur"
+              >
+                <span className="mb-2 text-2xl">{item.icon}</span>
+                <span className="text-xs font-bold text-[var(--accent-strong)]">
+                  Step {item.step}
+                </span>
+                <p className="mt-1 text-xs font-medium leading-snug text-[var(--foreground)]">
+                  {item.title}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* Get started name input */}
         <section
           className="float-in w-full rounded-[2.25rem] border border-white/60 bg-white/70 p-8 shadow-[var(--cloud-shadow-lg)] backdrop-blur-md"
@@ -655,8 +745,8 @@ export function CompoundersApp() {
               onChange={(event) => setNameInput(event.target.value)}
               autoFocus
             />
-            <button type="submit" className={primaryButtonClassName}>
-              Let&apos;s go
+            <button type="submit" className={ctaButtonClassName}>
+              Start tracking &mdash; it&apos;s free
             </button>
           </form>
         </section>
@@ -675,6 +765,31 @@ export function CompoundersApp() {
 
   return (
     <main className="mx-auto w-full max-w-2xl px-5 py-8 sm:py-12">
+      {/* Add to Home Screen banner */}
+      {showA2HSBanner ? (
+        <div className="float-in mb-6 flex items-center gap-3 rounded-2xl border border-[var(--accent-soft)] bg-gradient-to-r from-[var(--accent-soft)]/30 to-white/60 px-5 py-3.5 backdrop-blur">
+          <span className="text-xl flex-none">{"\u{1F4F1}"}</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-[var(--foreground)]">
+              Add Compounders to your home screen
+            </p>
+            <p className="text-xs text-[var(--muted)]">
+              Quick access to your streaks, every day.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={dismissA2HS}
+            className="flex-none rounded-full p-1.5 text-[var(--muted)] transition hover:bg-white/60 hover:text-[var(--foreground)]"
+            aria-label="Dismiss"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      ) : null}
+
       <header className="float-in mb-8 space-y-1">
         <p className="text-sm font-medium text-[var(--muted)]">
           {new Intl.DateTimeFormat("en-US", {
@@ -688,22 +803,40 @@ export function CompoundersApp() {
         </h1>
       </header>
 
-      <nav className="mb-6 inline-flex gap-1 rounded-full border border-white/70 bg-white/60 p-1 shadow-[var(--cloud-shadow-sm)] backdrop-blur">
-        <button
-          type="button"
-          className={view === "today" ? activeTabClassName : tabClassName}
-          onClick={() => switchView("today")}
-        >
-          Today
-        </button>
-        <button
-          type="button"
-          className={view === "setup" ? activeTabClassName : tabClassName}
-          onClick={() => switchView("setup")}
-        >
-          Setup
-        </button>
-      </nav>
+      <div className="mb-6 flex items-center gap-3">
+        <nav className="inline-flex gap-1 rounded-full border border-white/70 bg-white/60 p-1 shadow-[var(--cloud-shadow-sm)] backdrop-blur">
+          <button
+            type="button"
+            className={view === "today" ? activeTabClassName : tabClassName}
+            onClick={() => switchView("today")}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            className={view === "setup" ? activeTabClassName : tabClassName}
+            onClick={() => switchView("setup")}
+          >
+            Setup
+          </button>
+        </nav>
+
+        {/* Prominent share button */}
+        {activeRoutines.length > 0 ? (
+          <button
+            type="button"
+            onClick={shareStreaks}
+            className="ml-auto inline-flex items-center gap-2 rounded-full border border-[var(--accent-soft)] bg-gradient-to-r from-[var(--accent-soft)]/40 to-white/70 px-4 py-2 text-sm font-semibold text-[var(--accent-strong)] shadow-[0_2px_8px_-4px_rgba(255,140,90,0.2)] transition hover:-translate-y-0.5 hover:shadow-[var(--cloud-shadow-sm)]"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+              <polyline points="16,6 12,2 8,6" />
+              <line x1="12" y1="2" x2="12" y2="15" />
+            </svg>
+            Share Streaks
+          </button>
+        ) : null}
+      </div>
 
       {/* View content with crossfade transition */}
       <div key={viewKey} className="view-transition">
@@ -764,6 +897,7 @@ export function CompoundersApp() {
                     complete={false}
                     onToggle={() => toggleRoutineCompletion(routine.id)}
                     celebration={celebration?.routineId === routine.id ? celebration : null}
+                    onShareMilestone={shareMilestone}
                   />
                 ))}
 
@@ -775,6 +909,7 @@ export function CompoundersApp() {
                     complete
                     onToggle={() => toggleRoutineCompletion(routine.id)}
                     celebration={celebration?.routineId === routine.id ? celebration : null}
+                    onShareMilestone={shareMilestone}
                   />
                 ))}
 
@@ -1019,6 +1154,9 @@ function StreakHeatmap({ routine, now }: { routine: Routine; now: Date }) {
     return "bg-[var(--accent)]/40";
   }
 
+  // suppress unused variable warning
+  void todayStr;
+
   return (
     <div className="mt-3 flex gap-[3px]">
       {/* Day-of-week labels */}
@@ -1059,12 +1197,14 @@ function TodayCard({
   complete,
   onToggle,
   celebration,
+  onShareMilestone,
 }: {
   routine: Routine;
   now: Date;
   complete: boolean;
   onToggle: () => void;
   celebration: CelebrationState | null;
+  onShareMilestone: (title: string, streak: number) => void;
 }) {
   const streak = getCurrentStreak(routine, now);
   const [expanded, setExpanded] = useState(false);
@@ -1125,6 +1265,19 @@ function TodayCard({
               ) : null}
             </div>
           </div>
+          {/* Share milestone button - appears during celebration */}
+          {celebration ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShareMilestone(routine.title, celebration.streak);
+              }}
+              className="flex-none rounded-full border border-[var(--accent-soft)] bg-gradient-to-r from-[var(--accent-soft)]/50 to-white/80 px-3 py-1.5 text-xs font-semibold text-[var(--accent-strong)] transition hover:shadow-[var(--cloud-shadow-sm)]"
+            >
+              Share
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={(e) => {
@@ -1255,7 +1408,27 @@ function Toast({ message, exiting }: { message: string; exiting: boolean }) {
 function Footer() {
   return (
     <footer className="mt-16 pb-8 text-center">
-      <p className="text-xs text-[var(--muted)]/60">Built by Logan</p>
+      <div className="flex items-center justify-center gap-2 text-xs text-[var(--muted)]/60">
+        <span>Built by Logan</span>
+        <span aria-hidden>·</span>
+        <a
+          href="https://twitter.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="transition hover:text-[var(--foreground)]"
+        >
+          Twitter
+        </a>
+        <span aria-hidden>·</span>
+        <a
+          href="https://producthunt.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="transition hover:text-[var(--foreground)]"
+        >
+          Product Hunt
+        </a>
+      </div>
     </footer>
   );
 }
@@ -1269,6 +1442,9 @@ const inputClassName =
 
 const primaryButtonClassName =
   "rounded-full bg-[var(--foreground)] px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-[var(--cloud-shadow-sm)]";
+
+const ctaButtonClassName =
+  "w-full rounded-full bg-[var(--foreground)] px-6 py-4 text-base font-bold text-white transition hover:-translate-y-0.5 hover:shadow-[var(--cloud-shadow)] active:translate-y-0 active:shadow-none";
 
 const secondaryButtonClassName =
   "rounded-full border border-white/70 bg-white/70 px-5 py-3 text-sm font-semibold text-[var(--foreground)] transition hover:bg-white";
