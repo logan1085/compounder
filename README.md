@@ -1,6 +1,12 @@
-# Compounders
+# Compounder
 
-Compounders is a local-first Next.js app for tracking routines you want to keep on a daily, weekly, or monthly cadence. Each routine keeps its own completion history, current streak, best streak, and recent-window consistency so you can see what is compounding over time.
+Live site:
+
+- https://compounder-hazel.vercel.app
+
+Compounder is a local-first routines and streaks product built around privacy, consistency, and simple daily usefulness. The idea is straightforward: if a habit is meant to compound, the tool tracking it should not get in the way.
+
+Each routine keeps its own completion history, current streak, best streak, and recent-window consistency so you can see what is actually building over time.
 
 ## What it does
 
@@ -28,6 +34,15 @@ Open [http://localhost:3000](http://localhost:3000). If port `3000` is busy, Nex
 - React
 - TypeScript
 - Tailwind CSS v4
+
+## Why it exists
+
+This project reflects a product instinct I trust:
+
+- local-first by default
+- no account creation when it is unnecessary
+- clear value from the first minute
+- software that tries to earn repeat usage instead of manufacturing it
 
 ## Notes
 
